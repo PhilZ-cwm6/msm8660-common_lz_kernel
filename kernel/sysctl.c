@@ -1,4 +1,4 @@
-/* Tweaked my Thomas.Raines
+/* Tweaked my Thomas.Raines 
  * sysctl.c: General linux system control interface
  *
  * Begun 24 March 1995, Stephen Tweedie

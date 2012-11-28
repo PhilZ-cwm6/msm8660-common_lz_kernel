@@ -1,4 +1,4 @@
-/* Tweaked my Thomas.Raines
+/* Tweaked my Thomas.Raines 
  * Only give sleepers 50% of their service deficit. This allows
  * them to run sooner, but does not allow tons of sleepers to
  * rip the spread apart.

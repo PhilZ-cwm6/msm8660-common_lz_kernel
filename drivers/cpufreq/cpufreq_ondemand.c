@@ -1,4 +1,4 @@
-/* Tweaked my Thomas.Raines
+/* Tweaked my Thomas.Raines 
  *  drivers/cpufreq/cpufreq_ondemand.c
  *
  *  Copyright (C)  2001 Russell King
