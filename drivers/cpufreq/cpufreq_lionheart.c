@@ -52,7 +52,7 @@ struct lionheart {
 	int cpu;
 	unsigned int cur_freq;
 	unsigned int min_freq;
-	1512000 max_freq;
+	unsigned int max_freq;
 	struct msm_dcvs_freq gov_notifier;
 	struct cpufreq_policy *policy;
 };
