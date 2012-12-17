@@ -2618,13 +2618,26 @@ static void __init msm8x60_init_dsps(void)
 	platform_device_register(&msm_dsps_device);
 }
 #endif /* CONFIG_MSM_DSPS */
-
+ /*
+* Framebuffer size calculation. The 128kb extra is an old temp patch in
+* msm_fb.c that needs to be investigated and removed.
+*
+* (pix_w+align)*pix_h*bitdepth*double_buffer + 128kb
+*
+* VGA: (240+16)*320*2*2 + 128kb = 0x70000
+* prim: 320*480*2*2 + 128kb = 0xB6000
+* Triple bufferring hack:
+* VGA: (240+16)*320*2*3 + 128kb = 0x98000
+* prim: 320*480*2*3 + 128kb = 0x101000
+*/
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MSM_FB_PRIM_BUF_SIZE \
 		(roundup((1024 * 600 * 4), 4096) * 3) /* 4 bpp x 3 pages */
+#define MSM_FB_SIZE    0x98000
 #else
 #define MSM_FB_PRIM_BUF_SIZE \
 		(roundup((1024 * 600 * 4), 4096) * 2) /* 4 bpp x 2 pages */
+#define MSM_FB_SIZE    0x70000
 #endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
