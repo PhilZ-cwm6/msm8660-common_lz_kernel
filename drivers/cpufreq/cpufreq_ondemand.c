@@ -146,7 +146,7 @@ static struct dbs_tuners {
 	.sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
 	.down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
 	.ignore_nice = 1,
-	.powersave_bias = 500,
+	.powersave_bias = 50,
 	.freq_boost_time = DEFAULT_FREQ_BOOST_TIME,
 	.boostfreq = DEFAULT_FREQ_BOOST_TIME,
 };
