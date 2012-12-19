@@ -1,8 +1,8 @@
 VERSION = 3
 PATCHLEVEL = 0
 SUBLEVEL = 49
-EXTRAVERSION =
-NAME = Sneaky Weasel
+EXTRAVERSION = 3.X
+NAME = Lightning Zap
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
