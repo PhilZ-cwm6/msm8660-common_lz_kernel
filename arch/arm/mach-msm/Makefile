@@ -369,4 +369,3 @@ obj-$(CONFIG_SEC_DEBUG)		+= sec_debug_tablet.o sec_getlog.o sec_gaf.o
 else
 obj-$(CONFIG_SEC_DEBUG)		+= sec_debug.o sec_getlog.o sec_gaf.o
 endif
-
