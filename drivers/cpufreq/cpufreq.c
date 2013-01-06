@@ -29,17 +29,24 @@
 #include <linux/completion.h>
 #include <linux/mutex.h>
 #include <linux/syscore_ops.h>
-
+#include <linux/freq_uv_table.h>
 #include <trace/events/power.h>
 #include <linux/semaphore.h>
 
 /* Initial implementation of userspace voltage control */
+#define CONFIG_CPUFREQ_OC_UV 
+#ifdef CONFIG_CPUFREQ_OC_UV
+
+#define UV_SIZE 29
+int exp_UV_mV[UV_SIZE] = { 0 };
+extern unsigned int freq_uv_table[UV_SIZE][3];
+int enabled_freqs[UV_SIZE] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+#endif
 #define FREQCOUNT 29
 #define CPUMVMAX 1350
 #define CPUMVMIN 700
 int cpufrequency[FREQCOUNT] = { 192000, 384000, 432000, 486000, 540000, 594000, 648000, 702000, 756000, 810000, 864000, 918000, 972000, 1026000, 1080000, 1134000, 1188000, 1242000, 1296000, 1350000, 1404000, 1458000, 1512000, 1566000, 1620000, 1674000, 1728000, 1782000, 1836000 };
 int cpuvoltage[FREQCOUNT] = { 700, 700, 700, 725, 750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000, 1025, 1050, 1075, 1100, 1125, 1150, 1175, 1200, 1225, 1250, 1275, 1300, 1325, 1350 };
-int cpuuvoffset[FREQCOUNT] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 /**
  * The "cpufreq driver" - the arch- or hardware-dependent low
@@ -50,11 +57,7 @@ static struct cpufreq_driver *cpufreq_driver;
 static DEFINE_PER_CPU(struct cpufreq_policy *, cpufreq_cpu_data);
 #ifdef CONFIG_HOTPLUG_CPU
 /* This one keeps track of the previously set governor of a removed CPU */
-struct cpufreq_cpu_save_data {
-	char gov[CPUFREQ_NAME_LEN];
-	unsigned int max, min;
-};
-static DEFINE_PER_CPU(struct cpufreq_cpu_save_data, cpufreq_policy_save);
+static DEFINE_PER_CPU(char[CPUFREQ_NAME_LEN], cpufreq_cpu_governor);
 #endif
 static DEFINE_SPINLOCK(cpufreq_driver_lock);
 
@@ -96,15 +99,18 @@ int lock_policy_rwsem_##mode						\
 }
 
 lock_policy_rwsem(read, cpu);
+EXPORT_SYMBOL_GPL(lock_policy_rwsem_read);
 
 lock_policy_rwsem(write, cpu);
+EXPORT_SYMBOL_GPL(lock_policy_rwsem_write);
 
-static void unlock_policy_rwsem_read(int cpu)
+void unlock_policy_rwsem_read(int cpu)
 {
 	int policy_cpu = per_cpu(cpufreq_policy_cpu, cpu);
 	BUG_ON(policy_cpu == -1);
 	up_read(&per_cpu(cpu_policy_rwsem, policy_cpu));
 }
+EXPORT_SYMBOL_GPL(unlock_policy_rwsem_read);
 
 void unlock_policy_rwsem_write(int cpu)
 {
@@ -112,6 +118,7 @@ void unlock_policy_rwsem_write(int cpu)
 	BUG_ON(policy_cpu == -1);
 	up_write(&per_cpu(cpu_policy_rwsem, policy_cpu));
 }
+EXPORT_SYMBOL_GPL(unlock_policy_rwsem_write);
 
 
 /* internal prototypes */
@@ -650,6 +657,40 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 	}
 	return sprintf(buf, "%u\n", policy->cpuinfo.max_freq);
 }
+#ifdef CONFIG_CPUFREQ_OC_UV
+
+// sysfs interface for Xan's UV application
+
+static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf) {
+	return sprintf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n", 
+			exp_UV_mV[0], exp_UV_mV[1], exp_UV_mV[2], exp_UV_mV[3], exp_UV_mV[4], exp_UV_mV[5], 
+			exp_UV_mV[6], exp_UV_mV[7], exp_UV_mV[8], exp_UV_mV[9], exp_UV_mV[10], exp_UV_mV[11], 
+			exp_UV_mV[12], exp_UV_mV[13], exp_UV_mV[14], exp_UV_mV[15], exp_UV_mV[16], exp_UV_mV[17], 
+			exp_UV_mV[18], exp_UV_mV[19], exp_UV_mV[20], exp_UV_mV[21], exp_UV_mV[22], exp_UV_mV[23], 
+			exp_UV_mV[24], exp_UV_mV[25], exp_UV_mV[26], exp_UV_mV[27], exp_UV_mV[28]);
+
+}
+
+static ssize_t store_UV_mV_table(struct cpufreq_policy *policy,
+					const char *buf, size_t count) {
+
+	printk(KERN_DEBUG "store_UV_mV_table received:|%s|", buf);
+
+	unsigned int ret = -EINVAL;
+
+	ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", 
+			&exp_UV_mV[0], &exp_UV_mV[1], &exp_UV_mV[2], &exp_UV_mV[3], &exp_UV_mV[4], &exp_UV_mV[5], 
+			&exp_UV_mV[6], &exp_UV_mV[7], &exp_UV_mV[8], &exp_UV_mV[9], &exp_UV_mV[10], &exp_UV_mV[11], 
+			&exp_UV_mV[12], &exp_UV_mV[13], &exp_UV_mV[14], &exp_UV_mV[15], &exp_UV_mV[16], &exp_UV_mV[17], 
+			&exp_UV_mV[18], &exp_UV_mV[19], &exp_UV_mV[20], &exp_UV_mV[21], &exp_UV_mV[22], &exp_UV_mV[23], 
+			&exp_UV_mV[24], &exp_UV_mV[25], &exp_UV_mV[26], &exp_UV_mV[27], &exp_UV_mV[28]);
+	
+	if(ret != 1) {
+		return -EINVAL;
+	}
+	else
+		return count;
+}
 
 static ssize_t show_frequency_voltage_table(struct cpufreq_policy *policy, char *buf)
 {
@@ -660,20 +701,46 @@ static ssize_t show_frequency_voltage_table(struct cpufreq_policy *policy, char 
 	return table - buf;
 }
 
-static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
-{
-	char *table = buf;
-	int i;
+/* AOKP ROM seems to want to write to frequency_voltage_table, not UV_mV_table */
+/* For now, confirm what it is writing to the ROM */
 
-	table += sprintf(table, "%d", cpuuvoffset[0]);
-	for (i = 1; i < FREQCOUNT - 1; i++)
-	{
-		table += sprintf(table, " %d", cpuuvoffset[i]);
-	}
-	table += sprintf(table, " %d\n", cpuuvoffset[FREQCOUNT - 1]);
+#define AOKP_UV_HACK
+#ifdef AOKP_UV_HACK
 
-	return table - buf;
+static ssize_t store_frequency_voltage_table(struct cpufreq_policy *policy,
+					     const char *buf, size_t count) {
+
+	printk(KERN_DEBUG "store_frequency_voltage_table received:|%s|", buf);
+
+	/* return store_UV_mV_table(policy, buf, count); */
+
+	return count;
+
 }
+
+#endif
+
+static ssize_t show_states_enabled_table(struct cpufreq_policy *policy, char *buf) {
+	return sprintf(buf, "%d %d %d %d %d %d %d %d %d %d %d", 
+			enabled_freqs[0], enabled_freqs[1], enabled_freqs[2], enabled_freqs[3], enabled_freqs[4], enabled_freqs[5], 
+			enabled_freqs[6], enabled_freqs[7], enabled_freqs[8], enabled_freqs[9], enabled_freqs[10]);
+
+}
+
+static ssize_t store_states_enabled_table(struct cpufreq_policy *policy, const char *buf, int count) {
+	unsigned int ret = -EINVAL;
+
+	ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d", 
+			&enabled_freqs[0], &enabled_freqs[1], &enabled_freqs[2], &enabled_freqs[3], &enabled_freqs[4], &enabled_freqs[5], 
+			&enabled_freqs[6], &enabled_freqs[7], &enabled_freqs[8], &enabled_freqs[9], &enabled_freqs[10]);
+	if(ret != 1) {
+		return -EINVAL;
+	}
+	else
+		return count;
+}
+
+#endif
 
 static ssize_t show_cpuinfo_max_mV(struct cpufreq_policy *policy, char *buf)
 {
@@ -683,23 +750,6 @@ static ssize_t show_cpuinfo_max_mV(struct cpufreq_policy *policy, char *buf)
 static ssize_t show_cpuinfo_min_mV(struct cpufreq_policy *policy, char *buf)
 {
 	sprintf(buf, "%u\n", CPUMVMIN);
-}
-
-static ssize_t store_UV_mV_table(struct cpufreq_policy *policy, char *buf, size_t count)
-{
-	int tmptable[FREQCOUNT];
-	int i;
-	unsigned int ret = sscanf(buf, "%d %d %d %d %d %d %d %d %d %d %d %d %d", &tmptable[0], &tmptable[1], &tmptable[2], &tmptable[3], &tmptable[4], &tmptable[5], &tmptable[6], &tmptable[7], &tmptable[8], &tmptable[9], &tmptable[10], &tmptable[11], &tmptable[12]);
-	if (ret != FREQCOUNT)
-		return -EINVAL;
-	for (i = 0; i < FREQCOUNT; i++)
-	{
-		if ((cpuvoltage[i]-tmptable[i]) > CPUMVMAX || (cpuvoltage[i]-tmptable[i]) < CPUMVMIN) // Keep within constraints
-			return -EINVAL;
-		else
-			cpuuvoffset[i] = tmptable[i];
-	}
-	return count;
 }
 
 cpufreq_freq_attr_ro_perm(cpuinfo_cur_freq, 0400);
@@ -714,13 +764,16 @@ cpufreq_freq_attr_ro(scaling_cur_freq);
 cpufreq_freq_attr_ro(bios_limit);
 cpufreq_freq_attr_ro(related_cpus);
 cpufreq_freq_attr_ro(affected_cpus);
-cpufreq_freq_attr_ro(frequency_voltage_table);
 cpufreq_freq_attr_ro(cpu_utilization);
 cpufreq_freq_attr_rw(scaling_min_freq);
 cpufreq_freq_attr_rw(scaling_max_freq);
 cpufreq_freq_attr_rw(scaling_governor);
 cpufreq_freq_attr_rw(scaling_setspeed);
+#ifdef CONFIG_CPUFREQ_OC_UV
+cpufreq_freq_attr_ro(frequency_voltage_table);
 cpufreq_freq_attr_rw(UV_mV_table);
+cpufreq_freq_attr_rw(states_enabled_table);
+#endif
 
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
@@ -733,12 +786,15 @@ static struct attribute *default_attrs[] = {
 	&affected_cpus.attr,
 	&cpu_utilization.attr,
 	&related_cpus.attr,
-	&frequency_voltage_table.attr,
 	&scaling_governor.attr,
 	&scaling_driver.attr,
 	&scaling_available_governors.attr,
 	&scaling_setspeed.attr,
+#ifdef CONFIG_CPUFREQ_OC_UV	
 	&UV_mV_table.attr,
+	&frequency_voltage_table.attr,
+	&states_enabled_table.attr,
+#endif
 	NULL
 };
 
@@ -832,22 +888,12 @@ static int cpufreq_add_dev_policy(unsigned int cpu,
 #ifdef CONFIG_HOTPLUG_CPU
 	struct cpufreq_governor *gov;
 
-	gov = __find_governor(per_cpu(cpufreq_policy_save, cpu).gov);
+	gov = __find_governor(per_cpu(cpufreq_cpu_governor, cpu));
 	if (gov) {
 		policy->governor = gov;
 		pr_debug("Restoring governor %s for cpu %d\n",
 		       policy->governor->name, cpu);
 	}
-	if (per_cpu(cpufreq_policy_save, cpu).min) {
-		policy->min = per_cpu(cpufreq_policy_save, cpu).min;
-		policy->user_policy.min = policy->min;
-	}
-	if (per_cpu(cpufreq_policy_save, cpu).max) {
-		policy->max = per_cpu(cpufreq_policy_save, cpu).max;
-		policy->user_policy.max = policy->max;
-	}
-	pr_debug("Restoring CPU%d min %d and max %d\n",
-		cpu, policy->min, policy->max);
 #endif
 
 	for_each_cpu(j, policy->cpus) {
@@ -1197,12 +1243,8 @@ static int __cpufreq_remove_dev(struct sys_device *sys_dev)
 #ifdef CONFIG_SMP
 
 #ifdef CONFIG_HOTPLUG_CPU
-	strncpy(per_cpu(cpufreq_policy_save, cpu).gov, data->governor->name,
+	strncpy(per_cpu(cpufreq_cpu_governor, cpu), data->governor->name,
 			CPUFREQ_NAME_LEN);
-	per_cpu(cpufreq_policy_save, cpu).min = data->min;
-	per_cpu(cpufreq_policy_save, cpu).max = data->max;
-	pr_debug("Saving CPU%d policy min %d and max %d\n",
-			cpu, data->min, data->max);
 #endif
 
 	/* if we have other CPUs still registered, we need to unlink them,
@@ -1226,12 +1268,8 @@ static int __cpufreq_remove_dev(struct sys_device *sys_dev)
 				continue;
 			pr_debug("removing link for cpu %u\n", j);
 #ifdef CONFIG_HOTPLUG_CPU
-			strncpy(per_cpu(cpufreq_policy_save, j).gov,
+			strncpy(per_cpu(cpufreq_cpu_governor, j),
 				data->governor->name, CPUFREQ_NAME_LEN);
-			per_cpu(cpufreq_policy_save, j).min = data->min;
-			per_cpu(cpufreq_policy_save, j).max = data->max;
-			pr_debug("Saving CPU%d policy min %d and max %d\n",
-					j, data->min, data->max);
 #endif
 			cpu_sys_dev = get_cpu_sysdev(j);
 			kobj = &cpu_sys_dev->kobj;
@@ -1716,11 +1754,8 @@ void cpufreq_unregister_governor(struct cpufreq_governor *governor)
 	for_each_present_cpu(cpu) {
 		if (cpu_online(cpu))
 			continue;
-		if (!strcmp(per_cpu(cpufreq_policy_save, cpu).gov,
-					governor->name))
-			strcpy(per_cpu(cpufreq_policy_save, cpu).gov, "\0");
-		per_cpu(cpufreq_policy_save, cpu).min = 0;
-		per_cpu(cpufreq_policy_save, cpu).max = 0;
+		if (!strcmp(per_cpu(cpufreq_cpu_governor, cpu), governor->name))
+			strcpy(per_cpu(cpufreq_cpu_governor, cpu), "\0");
 	}
 #endif
 
