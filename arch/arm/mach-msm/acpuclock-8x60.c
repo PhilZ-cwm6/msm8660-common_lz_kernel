@@ -1060,7 +1060,7 @@ static __init struct clkctl_acpu_speed *select_freq_plan(void)
 			break;
 		}
 	} else {
-		acpu_freq_tbl = acpu_freq_tbl_1188mhz;
+		acpu_freq_tbl = acpu_freq_tbl_1512mhz_slow;
 	}
 
 	for (f = acpu_freq_tbl; f->acpuclk_khz != 0; f++)
@@ -1098,7 +1098,8 @@ static int __init acpuclk_8x60_init(struct acpuclk_soc_data *soc_data)
 
 	/* Improve boot time by ramping up CPUs immediately. */
 	for_each_online_cpu(cpu)
-		acpuclk_8x60_set_rate(cpu, MAX_BOOT_KHZ, SETRATE_INIT);
+		/*acpuclk_8x60_set_rate(cpu, MAX_BOOT_KHZ, SETRATE_INIT);*/
+		acpuclk_8x60_set_rate(cpu, max_freq->acpuclk_khz, SETRATE_INIT);
 
 	acpuclk_register(&acpuclk_8x60_data);
 	cpufreq_table_init();
